@@ -87,13 +87,10 @@ class _LoginPageState extends State<LoginPage> {
       
       if (!mounted) return;
       
-      // Navigate based on role
+      // Navigate based on role (restaurant removed)
       switch (_selectedRole) {
         case 'blogger':
           Navigator.pushReplacementNamed(context, '/blogger-home');
-          break;
-        case 'restaurant':
-          Navigator.pushReplacementNamed(context, '/restaurant/home');
           break;
         case 'customer':
         default:
@@ -185,13 +182,10 @@ class _LoginPageState extends State<LoginPage> {
         );
         
         if (mounted) {
-          // Navigate based on role
+          // Navigate based on role (restaurant removed)
           switch (_selectedRole) {
             case 'blogger':
               Navigator.pushReplacementNamed(context, '/blogger-home');
-              break;
-            case 'restaurant':
-              Navigator.pushReplacementNamed(context, '/restaurant/home');
               break;
             case 'customer':
             default:
@@ -304,11 +298,6 @@ class _LoginPageState extends State<LoginPage> {
                         value: 'blogger',
                         label: Text('Blogger'),
                         icon: Icon(Icons.edit),
-                      ),
-                      ButtonSegment(
-                        value: 'restaurant',
-                        label: Text('Restaurant'),
-                        icon: Icon(Icons.restaurant),
                       ),
                     ],
                     selected: {_selectedRole},

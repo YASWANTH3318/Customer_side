@@ -60,7 +60,20 @@ class _HelpSupportPageState extends State<HelpSupportPage> {
   }
 
   Future<void> _launchUrl(String url) async {
+    if (url.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Invalid URL')),
+        );
+      }
+      return;
+    }
     final Uri uri = Uri.parse(url);
+    if (!uri.hasScheme) {
+      // Default to https for bare domains
+      final String normalized = 'https://$url';
+      return _launchUrl(normalized);
+    }
     if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

@@ -641,7 +641,7 @@ class _HomePageState extends State<HomePage> {
             contentPadding: const EdgeInsets.all(16),
             leading: ClipRRect(
               borderRadius: BorderRadius.circular(8),
-              child: Image.network(
+              child: _buildSafeImage(
                 reservation.restaurantImage,
                 width: 60,
                 height: 60,
@@ -658,31 +658,31 @@ class _HomePageState extends State<HomePage> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const SizedBox(height: 8),
-                Row(
-                  children: [
-                    const Icon(Icons.calendar_today, size: 16),
-                    const SizedBox(width: 8),
-                    Text(
-                      DateFormat('MMM d, yyyy').format(reservation.reservationDate),
-                    ),
-                    const SizedBox(width: 16),
-                    const Icon(Icons.access_time, size: 16),
-                    const SizedBox(width: 8),
-                    Text(reservation.reservationTime),
-                  ],
-                ),
+              Wrap(
+                crossAxisAlignment: WrapCrossAlignment.center,
+                spacing: 8,
+                runSpacing: 4,
+                children: [
+                  const Icon(Icons.calendar_today, size: 16),
+                  Text(DateFormat('MMM d, yyyy').format(reservation.reservationDate)),
+                  const SizedBox(width: 12),
+                  const Icon(Icons.access_time, size: 16),
+                  Text(reservation.reservationTime),
+                ],
+              ),
                 const SizedBox(height: 8),
-                Row(
-                  children: [
-                    const Icon(Icons.people, size: 16),
-                    const SizedBox(width: 8),
-                    Text('${reservation.numberOfGuests} guests'),
-                    const SizedBox(width: 16),
-                    const Icon(Icons.chair, size: 16),
-                    const SizedBox(width: 8),
-                    Text(reservation.tableType),
-                  ],
-                ),
+              Wrap(
+                crossAxisAlignment: WrapCrossAlignment.center,
+                spacing: 8,
+                runSpacing: 4,
+                children: [
+                  const Icon(Icons.people, size: 16),
+                  Text('${reservation.numberOfGuests} guests'),
+                  const SizedBox(width: 12),
+                  const Icon(Icons.chair, size: 16),
+                  Text(reservation.tableType),
+                ],
+              ),
                 if (reservation.specialRequests != null) ...[
                   const SizedBox(height: 8),
                   Text(

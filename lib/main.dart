@@ -8,9 +8,7 @@ import 'widgets/role_based_auth_guard.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_app_check/firebase_app_check.dart';
 import 'firebase_options.dart';
-import 'pages/restaurant/restaurant_home_page.dart';
-import 'pages/restaurant/restaurant_details_page.dart';
-import 'pages/restaurant/restaurant_tables_page.dart';
+// Restaurant-side app removed for customer/blogger-only build
 import 'pages/blogger/blogger_home_page.dart';
 import 'dart:async';
 
@@ -80,9 +78,7 @@ class MyApp extends StatelessWidget {
       routes: {
         '/signup': (context) => const SignUpPage(),
         '/home': (context) => const HomePage(),
-        '/restaurant/home': (context) => const RestaurantHomePage(),
-        '/restaurant/details': (context) => const RestaurantDetailsPage(),
-        '/restaurant/tables': (context) => const RestaurantTablesPage(),
+        // Restaurant routes removed
         '/blogger-home': (context) => const BloggerHomePage(),
       },
     );

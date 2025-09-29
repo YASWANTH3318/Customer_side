@@ -3,7 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../pages/direct_access_page.dart';
 import '../pages/home_page.dart';
-import '../pages/restaurant/restaurant_home_page.dart';
+// Restaurant home removed in customer/blogger-only build
 import '../pages/blogger/blogger_home_page.dart';
 import '../utils/error_handler.dart';
 
@@ -94,9 +94,6 @@ class RoleBasedAuthGuard extends StatelessWidget {
                 if (userRole == 'customer' || userRole == 'user') {
                   debugPrint('Navigating to customer home page');
                   return const HomePage();
-                } else if (userRole == 'restaurant') {
-                  debugPrint('Navigating to restaurant home page');
-                  return const RestaurantHomePage();
                 } else if (userRole == 'blogger') {
                   debugPrint('Navigating to blogger home page');
                   return const BloggerHomePage();

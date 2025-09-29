@@ -115,99 +115,8 @@ class _RestaurantDetailsPageState extends State<RestaurantDetailsPage> with Sing
 
     String? specialRequests;
 
-    showDialog(
-      context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: const Text('Confirm Reservation'),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('Restaurant: ${widget.restaurant.name}'),
-                const SizedBox(height: 8),
-                Text('Date: ${_selectedDate?.toString().split(' ')[0]}'),
-                const SizedBox(height: 8),
-                Text('Time: $_selectedTime'),
-                const SizedBox(height: 8),
-                Text('Number of Guests: $_guestCount'),
-                const SizedBox(height: 16),
-                TextField(
-                  decoration: const InputDecoration(
-                    labelText: 'Special Requests (Optional)',
-                    hintText: 'e.g., Birthday celebration, Allergies, etc.',
-                    border: OutlineInputBorder(),
-                  ),
-                  maxLines: 2,
-                  onChanged: (value) => specialRequests = value,
-                ),
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Cancel'),
-            ),
-            ElevatedButton(
-              onPressed: () async {
-                try {
-                  // Find an available table that matches the guest count
-                  final availableTable = widget.restaurant.availableTables
-                      .firstWhere((table) => 
-                          table.isAvailable && 
-                          table.capacity >= _guestCount &&
-                          table.capacity <= _guestCount + 2,
-                        orElse: () => widget.restaurant.availableTables
-                            .firstWhere((table) => table.isAvailable,
-                                orElse: () => throw Exception('No tables available')));
-
-                  final reservation = Reservation(
-                    id: '', // Will be set by Firestore
-                    userId: user.uid,
-                    restaurantId: widget.restaurant.id,
-                    restaurantName: widget.restaurant.name,
-                    restaurantImage: widget.restaurant.image,
-                    reservationDate: _selectedDate!,
-                    reservationTime: _selectedTime!,
-                    numberOfGuests: _guestCount,
-                    tableId: availableTable.id,
-                    tableType: availableTable.type,
-                    status: ReservationStatus.pending,
-                    createdAt: DateTime.now(),
-                    specialRequests: specialRequests?.trim(),
-                  );
-
-                  await ReservationService.createReservation(reservation);
-                  
-                  if (mounted) {
-                    Navigator.pop(context); // Close dialog
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Reservation request sent! Please wait for confirmation.'),
-                        backgroundColor: Colors.green,
-                      ),
-                    );
-                  }
-                } catch (e) {
-                  if (mounted) {
-                    Navigator.pop(context); // Close dialog
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text('Error: ${e.toString()}'),
-                        backgroundColor: Colors.red,
-                      ),
-                    );
-                  }
-                }
-              },
-              child: const Text('Confirm'),
-            ),
-          ],
-        );
-      },
-    );
+    // Old confirmation dialog removed per new flow (auto-booking happens on booking page)
+    return;
   }
 
   void _showReviewDialog({bool isEdit = false}) {
@@ -626,10 +535,12 @@ class _RestaurantDetailsPageState extends State<RestaurantDetailsPage> with Sing
             expandedHeight: 200,
             pinned: true,
             flexibleSpace: FlexibleSpaceBar(
-              background: Image.network(
-                widget.restaurant.image,
-                fit: BoxFit.cover,
-              ),
+              background: (widget.restaurant.image.startsWith('http://') || widget.restaurant.image.startsWith('https://'))
+                  ? Image.network(
+                      widget.restaurant.image,
+                      fit: BoxFit.cover,
+                    )
+                  : Container(color: Colors.grey[300]),
               title: Text(
                 widget.restaurant.name,
                 style: const TextStyle(
@@ -704,16 +615,18 @@ class _RestaurantDetailsPageState extends State<RestaurantDetailsPage> with Sing
                             Container(
                               height: 200,
                               width: double.infinity,
-                              decoration: BoxDecoration(
-                                image: DecorationImage(
-                                  image: NetworkImage(widget.restaurant.image),
-                                  fit: BoxFit.cover,
-                                  colorFilter: ColorFilter.mode(
-                                    Colors.black.withOpacity(0.4),
-                                    BlendMode.darken,
-                                  ),
-                                ),
-                              ),
+                              decoration: (widget.restaurant.image.startsWith('http://') || widget.restaurant.image.startsWith('https://'))
+                                  ? BoxDecoration(
+                                      image: DecorationImage(
+                                        image: NetworkImage(widget.restaurant.image),
+                                        fit: BoxFit.cover,
+                                        colorFilter: ColorFilter.mode(
+                                          Colors.black.withOpacity(0.4),
+                                          BlendMode.darken,
+                                        ),
+                                      ),
+                                    )
+                                  : BoxDecoration(color: Colors.grey[400]),
                               child: Center(
                                 child: Column(
                                   mainAxisAlignment: MainAxisAlignment.center,

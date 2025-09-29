@@ -182,7 +182,15 @@ class _TableBookingPageState extends State<TableBookingPage> {
                     label: Text('${cap}p: $available available'),
                     selected: selected,
                     onSelected: selectable
-                        ? (v) => setState(() => _selectedCapacity = v ? cap : null)
+                        ? (v) async {
+                            if (!v) {
+                              setState(() => _selectedCapacity = null);
+                              return;
+                            }
+                            setState(() => _selectedCapacity = cap);
+                            // Auto-book immediately on selection
+                            await _bookTable();
+                          }
                         : null,
                   );
                 }).toList();
@@ -224,19 +232,12 @@ class _TableBookingPageState extends State<TableBookingPage> {
               ),
             const SizedBox(height: 16),
 
-            // Book Table Button
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: (_selectedTime != null && (_selectedCapacity != null)) ? _bookTable : null,
-                style: ElevatedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                ),
-                child: _isLoading
-                    ? const CircularProgressIndicator()
-                    : const Text('Book Table'),
-              ),
-            ),
+            // No explicit confirmation button; booking happens on table selection
+            if (_isLoading)
+              const Center(child: Padding(
+                padding: EdgeInsets.symmetric(vertical: 12),
+                child: CircularProgressIndicator(),
+              )),
           ],
         ),
       ),
@@ -369,15 +370,7 @@ class _TableBookingPageState extends State<TableBookingPage> {
         // print('Notification error: $e');
       }
       
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Table booked successfully!'),
-            backgroundColor: Colors.green,
-          ),
-        );
-        Navigator.pop(context);
-      }
+      // Silent success: no confirmation popups; keep user on page
     } catch (e) {
       // If hold succeeded but reservation failed, try to release seat
       if (_selectedTime != null && _reservationId != null) {
