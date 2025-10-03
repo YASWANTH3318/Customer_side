@@ -9,6 +9,7 @@ import '../utils/error_handler.dart';
 
 class RoleBasedAuthGuard extends StatelessWidget {
   const RoleBasedAuthGuard({super.key});
+  static const List<String> _allowedRolesForThisApp = ['customer', 'blogger'];
 
   @override
   Widget build(BuildContext context) {
@@ -90,7 +91,7 @@ class RoleBasedAuthGuard extends StatelessWidget {
                 debugPrint('User role from Firestore: $userRole');
                 debugPrint('User data: $userData');
                 
-                // Route to appropriate page based on role
+                // Enforce allowed roles and route to appropriate page
                 if (userRole == 'customer' || userRole == 'user') {
                   debugPrint('Navigating to customer home page');
                   return const HomePage();
@@ -98,8 +99,8 @@ class RoleBasedAuthGuard extends StatelessWidget {
                   debugPrint('Navigating to blogger home page');
                   return const BloggerHomePage();
                 } else {
-                  // No role found or unknown role
-                  debugPrint('No recognized role found: $userRole, signing out user');
+                  // No role found or role not allowed in this app
+                  debugPrint('Role not allowed or not recognized: $userRole, signing out user');
                   
                   // Show a dialog to the user to inform them about the issue
                   WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -108,10 +109,8 @@ class RoleBasedAuthGuard extends StatelessWidget {
                       barrierDismissible: false,
                       builder: (BuildContext context) {
                         return AlertDialog(
-                          title: const Text('Role Not Found'),
-                          content: const Text(
-                            'Your account does not have a recognized role. Please sign in again and select the appropriate role.'
-                          ),
+                          title: const Text('Access not allowed'),
+                          content: const Text('This account is not permitted in this application.'),
                           actions: [
                             TextButton(
                               onPressed: () {

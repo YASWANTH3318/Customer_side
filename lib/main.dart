@@ -74,7 +74,7 @@ class MyApp extends StatelessWidget {
           ),
         ),
       ),
-      home: const LoginPage(),
+      home: const RoleBasedAuthGuard(),
       routes: {
         '/signup': (context) => const SignUpPage(),
         '/home': (context) => const HomePage(),

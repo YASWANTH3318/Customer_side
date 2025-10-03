@@ -31,7 +31,8 @@ class _BloggerRestaurantsPageState extends State<BloggerRestaurantsPage> {
   @override
   void initState() {
     super.initState();
-    _loadRestaurants();
+    _loadRestaurants(); // Initial load
+    _setupRestaurantStreams(); // Setup real-time updates
   }
 
   Widget _buildSafeImage(
@@ -87,6 +88,27 @@ class _BloggerRestaurantsPageState extends State<BloggerRestaurantsPage> {
         });
       }
     }
+  }
+
+  // Real-time restaurant loading using streams
+  void _setupRestaurantStreams() {
+    // Listen to featured restaurants stream
+    RestaurantService.streamFeaturedRestaurants().listen((restaurants) {
+      if (mounted) {
+        setState(() {
+          _featuredRestaurants = restaurants;
+        });
+      }
+    });
+
+    // Listen to popular restaurants stream
+    RestaurantService.streamPopularRestaurants().listen((restaurants) {
+      if (mounted) {
+        setState(() {
+          _popularRestaurants = restaurants;
+        });
+      }
+    });
   }
 
   Future<void> _loadRestaurantsByCategory(String category) async {

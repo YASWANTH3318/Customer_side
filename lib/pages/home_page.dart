@@ -39,7 +39,8 @@ class _HomePageState extends State<HomePage> {
   @override
   void initState() {
     super.initState();
-    _loadRestaurants();
+    _loadRestaurants(); // Initial load
+    _setupRestaurantStreams(); // Setup real-time updates
   }
 
   Future<void> _loadRestaurants() async {
@@ -67,6 +68,27 @@ class _HomePageState extends State<HomePage> {
         });
       }
     }
+  }
+
+  // Real-time restaurant loading using streams
+  void _setupRestaurantStreams() {
+    // Listen to featured restaurants stream
+    RestaurantService.streamFeaturedRestaurants().listen((restaurants) {
+      if (mounted) {
+        setState(() {
+          _featuredRestaurants = restaurants;
+        });
+      }
+    });
+
+    // Listen to popular restaurants stream
+    RestaurantService.streamPopularRestaurants().listen((restaurants) {
+      if (mounted) {
+        setState(() {
+          _popularRestaurants = restaurants;
+        });
+      }
+    });
   }
 
   Future<void> _loadRestaurantsByCategory(String category) async {
@@ -151,6 +173,7 @@ class _HomePageState extends State<HomePage> {
       }
     } catch (e) {
       print('Error loading user data: $e');
+      // Don't show error to user for profile data loading
     }
   }
 
@@ -512,13 +535,44 @@ class _HomePageState extends State<HomePage> {
     }
 
     return FutureBuilder<List<Reservation>>(
-      future: ReservationService.getUserReservations(user.uid),
+      future: _getUserReservationsSafely(user.uid),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(child: CircularProgressIndicator());
         }
 
         if (snapshot.hasError) {
+          // Handle permission denied errors gracefully
+          if (snapshot.error.toString().contains('permission-denied')) {
+            return Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.calendar_today_outlined, 
+                    size: 64, 
+                    color: Colors.grey[400],
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    'No reservations yet',
+                    style: TextStyle(
+                      fontSize: 18,
+                      color: Colors.grey[600],
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Your restaurant reservations will appear here',
+                    style: TextStyle(
+                      color: Colors.grey[600],
+                    ),
+                  ),
+                ],
+              ),
+            );
+          }
+          
           return Center(
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
@@ -760,13 +814,24 @@ class _HomePageState extends State<HomePage> {
 
   Widget _buildProfileTab(User? user) {
     return FutureBuilder(
-      future: user != null ? UserService.getUserData(user.uid) : Future.value(null),
+      future: user != null ? _getUserDataSafely(user.uid) : Future.value(null),
       builder: (context, AsyncSnapshot<dynamic> snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(child: CircularProgressIndicator());
         }
 
         if (snapshot.hasError) {
+          // Handle permission denied errors gracefully
+          if (snapshot.error.toString().contains('permission-denied')) {
+            // Show basic profile with limited functionality
+            final defaultProfile = {
+              'name': user?.displayName ?? 'Customer',
+              'email': user?.email ?? 'customer@greedybites.com',
+              'photoURL': user?.photoURL,
+            };
+            return _buildProfileContent(defaultProfile);
+          }
+          
           return Center(
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
@@ -797,9 +862,9 @@ class _HomePageState extends State<HomePage> {
         if (!snapshot.hasData || !snapshot.data.exists || user == null) {
           // Create a basic profile for direct access mode
           final defaultProfile = {
-            'name': 'Customer',
-            'email': 'customer@greedybites.com',
-            'photoURL': null,
+            'name': user?.displayName ?? 'Customer',
+            'email': user?.email ?? 'customer@greedybites.com',
+            'photoURL': user?.photoURL,
           };
 
           return _buildProfileContent(defaultProfile);
@@ -809,6 +874,32 @@ class _HomePageState extends State<HomePage> {
         return _buildProfileContent(userData);
       },
     );
+  }
+
+  // Safe method to get user data with error handling
+  Future<dynamic> _getUserDataSafely(String userId) async {
+    try {
+      return await UserService.getUserData(userId);
+    } catch (e) {
+      if (e.toString().contains('permission-denied')) {
+        // Return a mock document that doesn't exist
+        return MockDocumentSnapshot();
+      }
+      rethrow;
+    }
+  }
+
+  // Safe method to get user reservations with error handling
+  Future<List<Reservation>> _getUserReservationsSafely(String userId) async {
+    try {
+      return await ReservationService.getUserReservations(userId);
+    } catch (e) {
+      if (e.toString().contains('permission-denied')) {
+        // Return empty list for permission denied
+        return [];
+      }
+      rethrow;
+    }
   }
 
   Widget _buildProfileContent(Map<String, dynamic> userData) {
@@ -1151,6 +1242,7 @@ class _HomePageState extends State<HomePage> {
   }
 }
 
+
 class FeaturedRestaurantCard extends StatelessWidget {
   final Restaurant restaurant;
 
@@ -1252,6 +1344,7 @@ class FeaturedRestaurantCard extends StatelessWidget {
     );
   }
 }
+
 
 Widget _buildSafeImage(
   String? url, {
@@ -1403,4 +1496,10 @@ class RestaurantCard extends StatelessWidget {
       ),
     );
   }
-} 
+}
+
+// Mock document snapshot for handling permission denied errors
+class MockDocumentSnapshot {
+  bool get exists => false;
+  Map<String, dynamic>? data() => null;
+}

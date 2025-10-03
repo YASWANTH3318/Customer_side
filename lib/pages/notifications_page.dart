@@ -28,24 +28,36 @@ class _NotificationsPageState extends State<NotificationsPage> {
       final user = FirebaseAuth.instance.currentUser;
       if (user == null) return;
 
-      final querySnapshot = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(user.uid)
-          .collection('notifications')
-          .orderBy('timestamp', descending: true)
-          .get();
+      try {
+        final querySnapshot = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(user.uid)
+            .collection('notifications')
+            .orderBy('timestamp', descending: true)
+            .get();
 
-      final notifications = querySnapshot.docs
-          .map((doc) => {
-                ...doc.data(),
-                'id': doc.id,
-              })
-          .toList();
+        final notifications = querySnapshot.docs
+            .map((doc) => {
+                  ...doc.data(),
+                  'id': doc.id,
+                })
+            .toList();
 
-      setState(() {
-        _notifications = notifications;
-        _isLoading = false;
-      });
+        setState(() {
+          _notifications = notifications;
+          _isLoading = false;
+        });
+      } catch (e) {
+        if (e.toString().contains('permission-denied')) {
+          // Handle permission denied gracefully - show empty notifications
+          setState(() {
+            _notifications = [];
+            _isLoading = false;
+          });
+        } else {
+          rethrow;
+        }
+      }
     } catch (e) {
       print('Error loading notifications: $e');
       setState(() {

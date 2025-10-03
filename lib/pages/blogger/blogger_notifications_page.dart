@@ -45,17 +45,38 @@ class _BloggerNotificationsPageState extends State<BloggerNotificationsPage> {
       try {
         _notifications = await NotificationService.getNotificationsForUser(userId);
       } catch (e) {
+        if (e.toString().contains('permission-denied')) {
+          // Handle permission denied gracefully - show empty notifications
+          setState(() {
+            _notifications = [];
+            _isLoading = false;
+          });
+          return;
+        }
+        
         // If service not implemented, use direct Firestore query as fallback
-        final snapshot = await FirebaseFirestore.instance
-            .collection('notifications')
-            .where('userId', isEqualTo: userId)
-            .orderBy('timestamp', descending: true)
-            .limit(30)
-            .get();
+        try {
+          final snapshot = await FirebaseFirestore.instance
+              .collection('notifications')
+              .where('userId', isEqualTo: userId)
+              .orderBy('timestamp', descending: true)
+              .limit(30)
+              .get();
 
-        _notifications = snapshot.docs
-            .map((doc) => NotificationModel.fromMap(doc.data(), doc.id))
-            .toList();
+          _notifications = snapshot.docs
+              .map((doc) => NotificationModel.fromMap(doc.data(), doc.id))
+              .toList();
+        } catch (firestoreError) {
+          if (firestoreError.toString().contains('permission-denied')) {
+            // Handle permission denied gracefully - show empty notifications
+            setState(() {
+              _notifications = [];
+              _isLoading = false;
+            });
+            return;
+          }
+          rethrow;
+        }
 
         // If no notifications, add some sample data for testing
         if (_notifications.isEmpty) {

@@ -82,20 +82,33 @@ class _LoginPageState extends State<LoginPage> {
         }
       }
       
-      // Proceed with sign-in
+      // Proceed with sign-in (service enforces allowed roles and does not overwrite existing role)
       final userCredential = await UserService.signInWithGoogle(role: _selectedRole);
       
       if (!mounted) return;
       
-      // Navigate based on role (restaurant removed)
-      switch (_selectedRole) {
-        case 'blogger':
-          Navigator.pushReplacementNamed(context, '/blogger-home');
-          break;
-        case 'customer':
-        default:
+      // Determine actual role from Firestore to navigate correctly
+      final uid = userCredential.user?.uid;
+      if (uid != null) {
+        final userDoc = await FirebaseFirestore.instance.collection('users').doc(uid).get();
+        if (userDoc.exists) {
+          final data = userDoc.data() as Map<String, dynamic>;
+          String? roleFromDb;
+          if (data['metadata'] != null && data['metadata'] is Map) {
+            roleFromDb = (data['metadata'] as Map<String, dynamic>)['role'] as String?;
+          }
+          roleFromDb ??= data['role'] as String?;
+
+          if (roleFromDb == 'blogger') {
+            Navigator.pushReplacementNamed(context, '/blogger-home');
+          } else {
+            Navigator.pushReplacementNamed(context, '/home');
+          }
+        } else {
           Navigator.pushReplacementNamed(context, '/home');
-          break;
+        }
+      } else {
+        Navigator.pushReplacementNamed(context, '/home');
       }
     } catch (e) {
       print('Google Sign-In Error: $e');
@@ -125,6 +138,8 @@ class _LoginPageState extends State<LoginPage> {
           _errorMessage = 'Google Sign-In was canceled. Please try again.';
         } else if (e.toString().contains('sign_in_required')) {
           _errorMessage = 'Please sign in to continue.';
+        } else if (e.toString().contains('role-not-allowed')) {
+          _errorMessage = 'This account is not permitted in this application.';
         } else {
           _errorMessage = 'Failed to sign in: ${e.toString()}';
         }
@@ -195,29 +210,77 @@ class _LoginPageState extends State<LoginPage> {
         }
       } on FirebaseAuthException catch (authError) {
         print('Firebase Auth Error: $authError');
-        if (mounted) {
-          setState(() {
-            switch (authError.code) {
-              case 'user-not-found':
-                _errorMessage = 'No user found with this email. Please sign up first.';
-                break;
-              case 'wrong-password':
-                _errorMessage = 'Incorrect password. Please try again.';
-                break;
-              case 'invalid-email':
-                _errorMessage = 'Invalid email address. Please check your email.';
-                break;
-              case 'user-disabled':
-                _errorMessage = 'This account has been disabled. Please contact support.';
-                break;
-              case 'too-many-requests':
-                _errorMessage = 'Too many failed attempts. Please try again later.';
-                break;
-              default:
-                _errorMessage = authError.message ?? 'Authentication failed. Please try again.';
+        if (authError.code == 'user-not-found') {
+          // Auto-create new account for new emails
+          try {
+            final email = _emailController.text.trim();
+            final password = _passwordController.text;
+            final name = email.split('@').first;
+            final username = name;
+
+            final signupCredential = await UserService.signUpWithEmail(
+              email: email,
+              password: password,
+              name: name,
+              username: username,
+              role: _selectedRole,
+            );
+
+            if (!mounted) return;
+
+            // Navigate based on actual role from Firestore
+            final uid = signupCredential.user?.uid;
+            if (uid != null) {
+              final userDoc = await FirebaseFirestore.instance.collection('users').doc(uid).get();
+              if (userDoc.exists) {
+                final data = userDoc.data() as Map<String, dynamic>;
+                String? roleFromDb;
+                if (data['metadata'] != null && data['metadata'] is Map) {
+                  roleFromDb = (data['metadata'] as Map<String, dynamic>)['role'] as String?;
+                }
+                roleFromDb ??= data['role'] as String?;
+
+                if (roleFromDb == 'blogger') {
+                  Navigator.pushReplacementNamed(context, '/blogger-home');
+                } else {
+                  Navigator.pushReplacementNamed(context, '/home');
+                }
+              } else {
+                Navigator.pushReplacementNamed(context, '/home');
+              }
+            } else {
+              Navigator.pushReplacementNamed(context, '/home');
             }
-            _isLoading = false;
-          });
+          } catch (signupError) {
+            if (mounted) {
+              setState(() {
+                _errorMessage = 'Failed to create account: ${signupError.toString()}';
+                _isLoading = false;
+              });
+            }
+          }
+        } else {
+          if (mounted) {
+            setState(() {
+              switch (authError.code) {
+                case 'wrong-password':
+                  _errorMessage = 'Incorrect password. Please try again.';
+                  break;
+                case 'invalid-email':
+                  _errorMessage = 'Invalid email address. Please check your email.';
+                  break;
+                case 'user-disabled':
+                  _errorMessage = 'This account has been disabled. Please contact support.';
+                  break;
+                case 'too-many-requests':
+                  _errorMessage = 'Too many failed attempts. Please try again later.';
+                  break;
+                default:
+                  _errorMessage = authError.message ?? 'Authentication failed. Please try again.';
+              }
+              _isLoading = false;
+            });
+          }
         }
       } catch (e) {
         print('Login Error: $e');

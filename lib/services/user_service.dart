@@ -16,6 +16,20 @@ class UserService {
   static final CollectionReference _customersCollection = _firestore.collection('customers');
   static final CollectionReference _bloggersCollection = _firestore.collection('bloggers');
   static final CollectionReference _restaurantsCollection = _firestore.collection('restaurants');
+  static const List<String> _allowedRolesForThisApp = ['customer', 'blogger'];
+
+  static int _appIdForRole(String role) {
+    switch (role) {
+      case 'customer':
+        return 1;
+      case 'blogger':
+        return 2;
+      case 'restaurant':
+        return 3;
+      default:
+        return 1;
+    }
+  }
 
   // Add rate limiting variables
   static DateTime? _lastUpdateTime;
@@ -319,6 +333,9 @@ class UserService {
 
           if (!userDoc.exists) {
             print('Creating new user document for Google user');
+            // Enforce allowed roles in this app for new users
+            final String enforcedRole = _allowedRolesForThisApp.contains(role) ? role : 'customer';
+            final int enforcedAppId = _appIdForRole(enforcedRole);
             final newUser = UserModel(
               id: user.uid,
               email: user.email ?? '',
@@ -333,7 +350,8 @@ class UserService {
                 'lastPasswordChange': DateTime.now().toIso8601String(),
                 'createdBy': 'google',
                 'accountType': 'google.com',
-                'role': role,
+                'role': enforcedRole,
+                'appId': enforcedAppId,
                 'createdAt': DateTime.now().toIso8601String(),
               },
             );
@@ -341,14 +359,40 @@ class UserService {
             await createUser(newUser);
           } else {
             print('Updating existing user document for Google user');
-            await _usersCollection.doc(user.uid).update({
+            // Read existing role and enforce access
+            final Map<String, dynamic> existingData = userDoc.data() as Map<String, dynamic>;
+            String? existingRole;
+            if (existingData['metadata'] != null && existingData['metadata'] is Map) {
+	          existingRole = (existingData['metadata'] as Map<String, dynamic>)['role'] as String?;
+	        }
+            if (existingRole == null && existingData.containsKey('role')) {
+              existingRole = existingData['role'] as String?;
+            }
+            int? existingAppId;
+            if (existingData['metadata'] != null && existingData['metadata'] is Map) {
+              existingAppId = (existingData['metadata'] as Map<String, dynamic>)['appId'] as int?;
+            }
+
+            if (existingRole != null && !_allowedRolesForThisApp.contains(existingRole)) {
+              // Disallow login for roles outside this app (e.g., restaurant)
+              await _auth.signOut();
+              throw FirebaseAuthException(code: 'role-not-allowed', message: 'This account role is not permitted in this app.');
+            }
+
+            final Map<String, dynamic> updateMap = {
               'lastLoginAt': FieldValue.serverTimestamp(),
               'isEmailVerified': user.emailVerified,
               'profileImageUrl': user.photoURL,
               'name': user.displayName,
               'metadata.lastLoginAt': FieldValue.serverTimestamp(),
-              'metadata.role': role,
-            });
+            };
+            // Only set appId if missing
+            if (existingAppId == null) {
+              final String roleToMap = existingRole ?? (_allowedRolesForThisApp.contains(role) ? role : 'customer');
+              updateMap['metadata.appId'] = _appIdForRole(roleToMap);
+            }
+
+            await _usersCollection.doc(user.uid).update(updateMap);
           }
         } catch (e) {
           // If we fail to update the user document, log but continue
@@ -399,6 +443,9 @@ class UserService {
       if (!userDoc.exists) {
         print('User document does not exist, creating new one...');
         // Create new user document if it doesn't exist
+        // Enforce allowed roles in this app for new users
+        final String enforcedRole = _allowedRolesForThisApp.contains(role) ? role : 'customer';
+        final int enforcedAppId = _appIdForRole(enforcedRole);
         final newUser = UserModel(
           id: user.uid,
           email: user.email ?? email,
@@ -410,7 +457,8 @@ class UserService {
           metadata: {
             'createdBy': 'email',
             'accountType': 'email',
-            'role': role,
+            'role': enforcedRole,
+            'appId': enforcedAppId,
             'createdAt': DateTime.now().toIso8601String(),
           },
         );
@@ -418,7 +466,7 @@ class UserService {
         await createUser(newUser);
         await _initializeDefaultsForRole(
           userId: user.uid,
-          role: role,
+          role: enforcedRole,
           name: newUser.name,
           email: newUser.email,
           username: newUser.username,
@@ -426,12 +474,35 @@ class UserService {
         print('New user document created successfully');
       } else {
         print('User document exists, updating last login...');
-        // Update last login time and role
-        await _usersCollection.doc(user.uid).update({
+        // Check existing role and block if not allowed in this app
+        final Map<String, dynamic> existingData = userDoc.data() as Map<String, dynamic>;
+        String? existingRole;
+        if (existingData['metadata'] != null && existingData['metadata'] is Map) {
+          existingRole = (existingData['metadata'] as Map<String, dynamic>)['role'] as String?;
+        }
+        if (existingRole == null && existingData.containsKey('role')) {
+          existingRole = existingData['role'] as String?;
+        }
+        int? existingAppId;
+        if (existingData['metadata'] != null && existingData['metadata'] is Map) {
+          existingAppId = (existingData['metadata'] as Map<String, dynamic>)['appId'] as int?;
+        }
+
+        if (existingRole != null && !_allowedRolesForThisApp.contains(existingRole)) {
+          await _auth.signOut();
+          throw FirebaseAuthException(code: 'role-not-allowed', message: 'This account role is not permitted in this app.');
+        }
+
+        // Update last login time without changing role; set appId only if missing
+        final Map<String, dynamic> updateMap = {
           'lastLoginAt': FieldValue.serverTimestamp(),
           'metadata.lastLoginAt': FieldValue.serverTimestamp(),
-          'metadata.role': role,
-        });
+        };
+        if (existingAppId == null) {
+          final String roleToMap = existingRole ?? (_allowedRolesForThisApp.contains(role) ? role : 'customer');
+          updateMap['metadata.appId'] = _appIdForRole(roleToMap);
+        }
+        await _usersCollection.doc(user.uid).update(updateMap);
         print('User document updated successfully');
       }
 
@@ -472,6 +543,7 @@ class UserService {
       print('Firebase Auth user created, creating Firestore document...');
 
       // Create user in Firestore
+      final int enforcedAppId = _appIdForRole(role);
       final user = UserModel(
         id: userCredential.user!.uid,
         email: email,
@@ -485,6 +557,7 @@ class UserService {
           'createdBy': 'email',
           'accountType': 'email',
           'role': role,
+          'appId': enforcedAppId,
           'createdAt': FieldValue.serverTimestamp(),
         },
       );

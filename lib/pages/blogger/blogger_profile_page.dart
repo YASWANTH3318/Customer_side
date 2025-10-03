@@ -24,7 +24,7 @@ class _BloggerProfilePageState extends State<BloggerProfilePage> {
       ? const Center(child: CircularProgressIndicator()) 
       : FutureBuilder(
           future: FirebaseAuth.instance.currentUser != null 
-              ? UserService.getUserData(FirebaseAuth.instance.currentUser!.uid)
+              ? _getUserDataSafely(FirebaseAuth.instance.currentUser!.uid)
               : Future.value(null),
           builder: (context, snapshot) {
             if (snapshot.connectionState == ConnectionState.waiting) {
@@ -32,6 +32,17 @@ class _BloggerProfilePageState extends State<BloggerProfilePage> {
             }
 
             if (snapshot.hasError) {
+              // Handle permission denied errors gracefully
+              if (snapshot.error.toString().contains('permission-denied')) {
+                final currentUser = FirebaseAuth.instance.currentUser;
+                final newUser = {
+                  'name': currentUser?.displayName ?? 'Blogger',
+                  'email': currentUser?.email ?? '',
+                  'photoURL': currentUser?.photoURL,
+                };
+                return _buildProfileContent(newUser);
+              }
+              
               return Center(
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
@@ -74,6 +85,19 @@ class _BloggerProfilePageState extends State<BloggerProfilePage> {
             return _buildProfileContent(userData);
           },
         );
+  }
+
+  // Safe method to get user data with error handling
+  Future<dynamic> _getUserDataSafely(String userId) async {
+    try {
+      return await UserService.getUserData(userId);
+    } catch (e) {
+      if (e.toString().contains('permission-denied')) {
+        // Return a mock document that doesn't exist
+        return MockDocumentSnapshot();
+      }
+      rethrow;
+    }
   }
 
   Widget _buildProfileContent(Map<String, dynamic> userData) {
@@ -356,4 +380,10 @@ class _BloggerProfilePageState extends State<BloggerProfilePage> {
       onTap: onTap,
     );
   }
+}
+
+// Mock document snapshot for handling permission denied errors
+class MockDocumentSnapshot {
+  bool get exists => false;
+  Map<String, dynamic>? data() => null;
 } 

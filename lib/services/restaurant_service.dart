@@ -1,62 +1,96 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/restaurant.dart';
+import 'restaurant_notification_service.dart';
 
 class RestaurantService {
   static final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   static const String _collection = 'restaurants';
 
-  // Get featured restaurants
+  // Get featured restaurants (prefer appId=3 if present, otherwise show top-rated)
   static Future<List<Restaurant>> getFeaturedRestaurants() async {
     try {
-      final snapshot = await _firestore
+      // First try to fetch featured from restaurant app
+      Query query = _firestore
           .collection(_collection)
           .where('isFeatured', isEqualTo: true)
           .orderBy('rating', descending: true)
-          .limit(5)
-          .get();
+          .limit(5);
 
-      if (snapshot.docs.isNotEmpty) {
-        return snapshot.docs
+      // Attempt to scope to restaurant app; if field missing, fallback will still work
+      try {
+        query = query.where('metadata.appId', isEqualTo: 3);
+      } catch (_) {}
+
+      final snapshot = await query.get();
+
+      // If none found (or field missing), fallback to top-rated regardless of metadata
+      if (snapshot.docs.isEmpty) {
+        final fallback = await _firestore
+            .collection(_collection)
+            .orderBy('rating', descending: true)
+            .limit(5)
+            .get();
+        return fallback.docs
             .map((doc) {
-              final data = doc.data();
-              return Restaurant.fromMap({...data, 'id': doc.id});
+              final data = doc.data() as Map<String, dynamic>;
+              final map = Map<String, dynamic>.from(data)..['id'] = doc.id;
+              return Restaurant.fromMap(map);
             })
             .toList();
-      } else {
-        // Return mock data if no restaurants found
-        return _getMockRestaurants();
       }
+
+      return snapshot.docs
+          .map((doc) {
+            final data = doc.data() as Map<String, dynamic>;
+            final map = Map<String, dynamic>.from(data)..['id'] = doc.id;
+            return Restaurant.fromMap(map);
+          })
+          .toList();
     } catch (e) {
       print('Error getting featured restaurants: $e');
-      // Return mock data on error
-      return _getMockRestaurants();
+      return []; // Return empty list instead of mock data
     }
   }
 
-  // Get popular restaurants
+  // Get popular restaurants (prefer appId=3 if present, otherwise show top-rated)
   static Future<List<Restaurant>> getPopularRestaurants() async {
     try {
-      final snapshot = await _firestore
+      Query query = _firestore
           .collection(_collection)
           .orderBy('rating', descending: true)
-          .limit(10)
-          .get();
+          .limit(10);
 
-      if (snapshot.docs.isNotEmpty) {
-        return snapshot.docs
+      try {
+        query = query.where('metadata.appId', isEqualTo: 3);
+      } catch (_) {}
+
+      final snapshot = await query.get();
+
+      if (snapshot.docs.isEmpty) {
+        final fallback = await _firestore
+            .collection(_collection)
+            .orderBy('rating', descending: true)
+            .limit(10)
+            .get();
+        return fallback.docs
             .map((doc) {
-              final data = doc.data();
-              return Restaurant.fromMap({...data, 'id': doc.id});
+              final data = doc.data() as Map<String, dynamic>;
+              final map = Map<String, dynamic>.from(data)..['id'] = doc.id;
+              return Restaurant.fromMap(map);
             })
             .toList();
-      } else {
-        // Return mock data if no restaurants found
-        return _getMockRestaurants();
       }
+
+      return snapshot.docs
+          .map((doc) {
+            final data = doc.data() as Map<String, dynamic>;
+            final map = Map<String, dynamic>.from(data)..['id'] = doc.id;
+            return Restaurant.fromMap(map);
+          })
+          .toList();
     } catch (e) {
       print('Error getting popular restaurants: $e');
-      // Return mock data on error
-      return _getMockRestaurants();
+      return []; // Return empty list instead of mock data
     }
   }
 
@@ -65,16 +99,17 @@ class RestaurantService {
     try {
       final doc = await _firestore.collection(_collection).doc(id).get();
       if (!doc.exists) return null;
-      final data = doc.data();
+      final data = doc.data() as Map<String, dynamic>?;
       if (data == null) return null;
-      return Restaurant.fromMap({...data, 'id': doc.id});
+      final map = Map<String, dynamic>.from(data)..['id'] = doc.id;
+      return Restaurant.fromMap(map);
     } catch (e) {
       print('Error getting restaurant by ID: $e');
       rethrow;
     }
   }
 
-  // Search restaurants
+  // Search restaurants (only from restaurant app - appId = 3)
   static Future<List<Restaurant>> searchRestaurants(String query, {double? maxDistance}) async {
     try {
       print('Searching for restaurants with query: $query');
@@ -88,8 +123,10 @@ class RestaurantService {
         return getPopularRestaurants();
       }
 
-      // Get all restaurants from collection
-      final snapshot = await _firestore.collection(_collection).get();
+      // Get all restaurants; if metadata.appId exists it will still be included
+      final snapshot = await _firestore
+          .collection(_collection)
+          .get();
       print('Found ${snapshot.docs.length} restaurants in database');
       
       for (final doc in snapshot.docs) {
@@ -123,7 +160,8 @@ class RestaurantService {
         if (hasMatch) {
           print('Found matching restaurant: ${data['name']}');
           try {
-            final restaurant = Restaurant.fromMap({...data, 'id': doc.id});
+            final map = Map<String, dynamic>.from(data)..['id'] = doc.id;
+            final restaurant = Restaurant.fromMap(map);
             
             // If it's an exact name match, prioritize it
             if (hasExactNameMatch) {
@@ -181,14 +219,18 @@ class RestaurantService {
 
   static Future<List<Restaurant>> getRestaurantsByCategory(String category) async {
     try {
-      final snapshot = await _firestore
+      Query query = _firestore
           .collection(_collection)
-          .where('foodType', isEqualTo: category.toLowerCase())
-          .get();
+          .where('foodType', isEqualTo: category.toLowerCase());
+      try {
+        query = query.where('metadata.appId', isEqualTo: 3);
+      } catch (_) {}
+      final snapshot = await query.get();
 
       return snapshot.docs.map((doc) {
-        final data = doc.data();
-        return Restaurant.fromMap({...data, 'id': doc.id});
+        final data = doc.data() as Map<String, dynamic>;
+        final map = Map<String, dynamic>.from(data)..['id'] = doc.id;
+        return Restaurant.fromMap(map);
       }).toList();
     } catch (e) {
       print('Error getting restaurants by category: $e');
@@ -199,14 +241,18 @@ class RestaurantService {
 
   static Future<List<Restaurant>> getRestaurantsByCuisine(String cuisine) async {
     try {
-      final snapshot = await _firestore
+      Query query = _firestore
           .collection(_collection)
-          .where('cuisine', isEqualTo: cuisine)
-          .get();
+          .where('cuisine', isEqualTo: cuisine);
+      try {
+        query = query.where('metadata.appId', isEqualTo: 3);
+      } catch (_) {}
+      final snapshot = await query.get();
 
       return snapshot.docs.map((doc) {
-        final data = doc.data();
-        return Restaurant.fromMap({...data, 'id': doc.id});
+        final data = doc.data() as Map<String, dynamic>;
+        final map = Map<String, dynamic>.from(data)..['id'] = doc.id;
+        return Restaurant.fromMap(map);
       }).toList();
     } catch (e) {
       print('Error getting restaurants by cuisine: $e');
@@ -257,11 +303,26 @@ class RestaurantService {
           'state': restaurantData['state'],
           'pincode': restaurantData['pincode'],
         },
+        'metadata': {
+          'appId': 3, // Restaurant app ID
+          'createdAt': FieldValue.serverTimestamp(),
+          'isActive': true,
+        },
         'lastUpdated': FieldValue.serverTimestamp(),
       };
 
       // Update or create restaurant document in restaurants collection
       await _firestore.collection('restaurants').doc(userId).set(restaurantDoc, SetOptions(merge: true));
+      
+      // Send notifications to customers and bloggers about new restaurant
+      await RestaurantNotificationService.notifyNewRestaurantRegistration(
+        restaurantId: userId,
+        restaurantName: restaurantData['name'],
+        cuisine: restaurantData['cuisineTypes']?.isNotEmpty == true 
+            ? restaurantData['cuisineTypes'][0] 
+            : 'Multi-Cuisine',
+        address: restaurantData['fullAddress'],
+      );
       
       print('Restaurant data synced successfully for: ${restaurantData['name']}');
     } catch (e) {
@@ -297,6 +358,16 @@ class RestaurantService {
         'menu': menuByCategory,
         'lastUpdated': FieldValue.serverTimestamp(),
       });
+
+      // Get restaurant name for notification
+      final restaurantDoc = await _firestore.collection('restaurants').doc(restaurantId).get();
+      final restaurantName = restaurantDoc.data()?['name'] ?? 'Restaurant';
+
+      // Send notification about menu update
+      await RestaurantNotificationService.notifyMenuUpdate(
+        restaurantId: restaurantId,
+        restaurantName: restaurantName,
+      );
     } catch (e) {
       print('Error updating restaurant menu: $e');
       throw e;
@@ -309,6 +380,16 @@ class RestaurantService {
         'availableTables': tables,
         'lastUpdated': FieldValue.serverTimestamp(),
       });
+
+      // Get restaurant name for notification
+      final restaurantDoc = await _firestore.collection('restaurants').doc(restaurantId).get();
+      final restaurantName = restaurantDoc.data()?['name'] ?? 'Restaurant';
+
+      // Send notification about table update
+      await RestaurantNotificationService.notifyTableUpdate(
+        restaurantId: restaurantId,
+        restaurantName: restaurantName,
+      );
     } catch (e) {
       print('Error updating restaurant tables: $e');
       throw e;
@@ -321,9 +402,124 @@ class RestaurantService {
         'openingHours': hours,
         'lastUpdated': FieldValue.serverTimestamp(),
       });
+
+      // Get restaurant name for notification
+      final restaurantDoc = await _firestore.collection('restaurants').doc(restaurantId).get();
+      final restaurantName = restaurantDoc.data()?['name'] ?? 'Restaurant';
+
+      // Send notification about hours update
+      await RestaurantNotificationService.notifyHoursUpdate(
+        restaurantId: restaurantId,
+        restaurantName: restaurantName,
+      );
     } catch (e) {
       print('Error updating restaurant hours: $e');
       throw e;
+    }
+  }
+
+  // Real-time stream for restaurants (for live updates)
+  static Stream<List<Restaurant>> streamRestaurants() {
+    // Try to filter by appId/isActive; if fields are missing, Firestore still streams docs
+    final base = _firestore.collection(_collection);
+    Query query = base.orderBy('lastUpdated', descending: true);
+    try { query = query.where('metadata.appId', isEqualTo: 3); } catch (_) {}
+    try { query = query.where('metadata.isActive', isEqualTo: true); } catch (_) {}
+    return query.snapshots()
+        .map((snapshot) {
+      return snapshot.docs
+          .map((doc) {
+            final data = doc.data() as Map<String, dynamic>;
+            final map = Map<String, dynamic>.from(data)..['id'] = doc.id;
+            return Restaurant.fromMap(map);
+          })
+          .toList();
+    });
+  }
+
+  // Real-time stream for featured restaurants
+  static Stream<List<Restaurant>> streamFeaturedRestaurants() {
+    final base = _firestore.collection(_collection);
+    Query query = base.where('isFeatured', isEqualTo: true)
+        .orderBy('rating', descending: true)
+        .limit(5);
+    try { query = query.where('metadata.appId', isEqualTo: 3); } catch (_) {}
+    try { query = query.where('metadata.isActive', isEqualTo: true); } catch (_) {}
+    return query.snapshots()
+        .map((snapshot) {
+      return snapshot.docs
+          .map((doc) {
+            final data = doc.data() as Map<String, dynamic>;
+            final map = Map<String, dynamic>.from(data)..['id'] = doc.id;
+            return Restaurant.fromMap(map);
+          })
+          .toList();
+    });
+  }
+
+  // Real-time stream for popular restaurants
+  static Stream<List<Restaurant>> streamPopularRestaurants() {
+    final base = _firestore.collection(_collection);
+    Query query = base.orderBy('rating', descending: true).limit(10);
+    try { query = query.where('metadata.appId', isEqualTo: 3); } catch (_) {}
+    try { query = query.where('metadata.isActive', isEqualTo: true); } catch (_) {}
+    return query.snapshots()
+        .map((snapshot) {
+      return snapshot.docs
+          .map((doc) {
+            final data = doc.data() as Map<String, dynamic>;
+            final map = Map<String, dynamic>.from(data)..['id'] = doc.id;
+            return Restaurant.fromMap(map);
+          })
+          .toList();
+    });
+  }
+
+  // Update restaurant status (active/inactive)
+  static Future<void> updateRestaurantStatus(String restaurantId, bool isActive) async {
+    try {
+      await _firestore.collection('restaurants').doc(restaurantId).update({
+        'metadata.isActive': isActive,
+        'lastUpdated': FieldValue.serverTimestamp(),
+      });
+    } catch (e) {
+      print('Error updating restaurant status: $e');
+      throw e;
+    }
+  }
+
+  // Update restaurant featured status
+  static Future<void> updateRestaurantFeaturedStatus(String restaurantId, bool isFeatured) async {
+    try {
+      await _firestore.collection('restaurants').doc(restaurantId).update({
+        'isFeatured': isFeatured,
+        'lastUpdated': FieldValue.serverTimestamp(),
+      });
+    } catch (e) {
+      print('Error updating restaurant featured status: $e');
+      throw e;
+    }
+  }
+
+  // Get all restaurants for admin purposes
+  static Future<List<Restaurant>> getAllRestaurants() async {
+    try {
+      Query query = _firestore
+          .collection(_collection)
+          .orderBy('lastUpdated', descending: true);
+      try { query = query.where('metadata.appId', isEqualTo: 3); } catch (_) {}
+      final snapshot = await query.get();
+
+      return snapshot.docs
+          .map((doc) {
+            final data = doc.data() as Map<String, dynamic>;
+            final map = Map<String, dynamic>.from(data)..['id'] = doc.id;
+            return Restaurant.fromMap(map);
+          })
+          .toList();
+    } catch (e) {
+      print('Error getting all restaurants: $e');
+      return [];
     }
   }
 }
